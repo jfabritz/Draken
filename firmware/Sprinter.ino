@@ -39,6 +39,10 @@
   -  M30 Command can delete files on SD Card
   -  move string to flash to free RAM vor forward planner
   -  M203 Temperature monitor for Repetier
+ 
+ Version 2.0.1
+  - Modify servo (280) to support stepped movement with delay
+    - M280 P0 S10 I20 D200 -- from the current angle by a step of 20 to 10° wait 20 ms between steps
   
  Version 2.0
   - Add Servo support
@@ -260,7 +264,7 @@ void __cxa_pure_virtual(){};
 
 // M220 - set speed factor override percentage S=factor in percent 
 // M221 - set extruder multiply factor S100 --> original Extrude Speed 
-// M280 - set servo position absolute. P: servo index, S: angle or microseconds
+// M280 - set servo position absolute. P: servo index, S: angle or microseconds, I: movement step angle, D: delay between steps in ms
 
 // M301 - Set PID parameters P I and D
 // M303 - PID relay autotune S<temperature> sets the target temperature. (default target temperature = 150C)
@@ -281,7 +285,7 @@ void __cxa_pure_virtual(){};
 // M606 - Turn Off the Projector
 
 
-#define _VERSION_TEXT "2.0 / 17.03.2015"
+#define _VERSION_TEXT "2.0.1 / 31.10.2015"
 
 //Stepper Movement Variables
 char axis_codes[NUM_AXIS] = {'X', 'Y', 'Z', 'E'};
@@ -1928,32 +1932,70 @@ FORCE_INLINE void process_commands()
         }
       }
       break;
-          #if NUM_SERVOS > 0
-    case 280: // M280 - set servo position absolute. P: servo index, S: angle or microseconds
+
+#if NUM_SERVOS > 0
+      case 280: // M280 - set servo position absolute. P: servo index, S: angle or microseconds, I: step interval angle, D: step interval delay
       {
         int servo_index = -1;
+        int servo_interval = 0;
+        int servo_delay = 0;
         int servo_position = 0;
+        
         if (code_seen('P'))
           servo_index = code_value();
-        if (code_seen('S')) {
+        if (code_seen('I'))
+          servo_interval = code_value();
+        if (code_seen('D'))
+          servo_delay = code_value();
+        if (code_seen('S')) 
+        {
           servo_position = code_value();
-          if ((servo_index >= 0) && (servo_index < NUM_SERVOS)) {
+          if ((servo_index >= 0) && (servo_index < NUM_SERVOS)) 
+          {
 #if defined (ENABLE_AUTO_BED_LEVELING) && (PROBE_SERVO_DEACTIVATION_DELAY > 0)
-		      servos[servo_index].attach(0);
+            servos[servo_index].attach(0);
 #endif
-            servos[servo_index].write(servo_position);
+            if (servo_interval > 0)
+            {
+              int i = 0;
+              int servo_current = 0;
+              
+              servo_current = servos[servo_index].read();
+              if (servo_current > servo_position)
+              {
+                for (i=servo_current; i>=servo_position; i-=servo_interval)
+                {
+                  servos[servo_index].write(i);
+                  if (servo_delay > 0)
+                    delay(servo_delay);
+                }
+              }
+              else if (servo_current < servo_position)
+              {
+                for (i=servo_current; i<=servo_position; i+=servo_interval)
+                {
+                  servos[servo_index].write(i);
+                  if (servo_delay > 0)
+                    delay(servo_delay);
+                }
+              }
+            }
+            else
+              servos[servo_index].write(servo_position);
 #if defined (ENABLE_AUTO_BED_LEVELING) && (PROBE_SERVO_DEACTIVATION_DELAY > 0)
-              delay(PROBE_SERVO_DEACTIVATION_DELAY);
-              servos[servo_index].detach();
+            delay(PROBE_SERVO_DEACTIVATION_DELAY);
+            servos[servo_index].detach();
 #endif
           }
-          else {
+          else 
+          {
             showString(PSTR("Servo "));
             Serial.print(servo_index);
             showString(PSTR(" out of range"));
           }
         }
-        else if (servo_index >= 0) {
+        else if (servo_index >= 0) 
+        {
           showString(PSTR(" Servo "));
           Serial.print(servo_index);
           showString(PSTR(": "));
@@ -1962,7 +2004,7 @@ FORCE_INLINE void process_commands()
         }
       }
       break;
-    #endif // NUM_SERVOS > 0
+#endif // NUM_SERVOS > 0
 
 #ifdef PIDTEMP
       case 301: // M301
