@@ -39,10 +39,11 @@
   -  M30 Command can delete files on SD Card
   -  move string to flash to free RAM vor forward planner
   -  M203 Temperature monitor for Repetier
- 
- Version 2.0.1
-  - Modify servo (280) to support stepped movement with delay
-    - M280 P0 S10 I20 D200 -- from the current angle by a step of 20 to 10° wait 20 ms between steps
+
+ Version 2.1
+  - Enhance M280 command to allow stepped and delayed servo movement
+  - Add Vivitek projector control support
+  - Add parameter to projector M605/M606 comamnd to select projector
   
  Version 2.0
   - Add Servo support
@@ -184,6 +185,8 @@
   #include "store_eeprom.h"
 #endif
 
+#include "dlp3dpapi.h"
+
 #ifndef CRITICAL_SECTION_START
 #ifdef ARDUINO_ARCH_STM32
   #define CRITICAL_SECTION_START  cli();
@@ -264,7 +267,7 @@ void __cxa_pure_virtual(){};
 
 // M220 - set speed factor override percentage S=factor in percent 
 // M221 - set extruder multiply factor S100 --> original Extrude Speed 
-// M280 - set servo position absolute. P: servo index, S: angle or microseconds, I: movement step angle, D: delay between steps in ms
+// M280 - set servo position absolute. P: servo index, S: angle or microseconds
 
 // M301 - Set PID parameters P I and D
 // M303 - PID relay autotune S<temperature> sets the target temperature. (default target temperature = 150C)
@@ -285,7 +288,7 @@ void __cxa_pure_virtual(){};
 // M606 - Turn Off the Projector
 
 
-#define _VERSION_TEXT "2.0.1 / 31.10.2015"
+#define _VERSION_TEXT "2.1 / 16.05.2016"
 
 //Stepper Movement Variables
 char axis_codes[NUM_AXIS] = {'X', 'Y', 'Z', 'E'};
@@ -648,8 +651,8 @@ unsigned char manage_monitor = 255;
 
 int FreeRam1(void)
 {
-  extern int  __bss_end;
-  extern int* __brkval;
+  extern int __bss_end;
+  extern int *__brkval;
   int free_memory;
 
   if (reinterpret_cast<int>(__brkval) == 0)
@@ -749,12 +752,20 @@ void servo_init()
 //------------------------------------------------
 void setup()
 { 
-  
   Serial.begin(BAUDRATE);
-  showString(PSTR("Sprinter\r\n"));
-  showString(PSTR(_VERSION_TEXT));
-  showString(PSTR("\r\n"));
-  showString(PSTR("start\r\n"));
+  
+  if( dlp3dpapi_enabled() )
+  {
+    dlp3dpapi_display_banner();
+  }
+  else
+  {
+    showString(PSTR("Sprinter\r\n"));
+    showString(PSTR(_VERSION_TEXT));
+    showString(PSTR("\r\n"));
+    showString(PSTR("start\r\n"));
+  }
+  
   servo_init();
 
   for(int16_t i = 0; i < BUFSIZE; i++)
@@ -762,12 +773,9 @@ void setup()
       fromsd[i] = false;
   }
   
-#ifdef PROJECTOR_CTRL
-PJSerial.begin(PJ_CMD_BAUDRATE);
-Serial.println("Projector On");
-PJSerial.write(PJ_CMD_ON,sizeof(PJ_CMD_ON));
-ClearToSend();
-#endif
+//#ifdef PROJECTOR_CTRL
+//  PJSerial.begin(PJ_CMD_BAUDRATE);
+//#endif
   
   //Initialize Dir Pins
   #if X_DIR_PIN > -1
@@ -937,10 +945,16 @@ ClearToSend();
   init_Timer2_softpwm();
   #endif
   
-  showString(PSTR("Planner Init\r\n"));
+  if(!dlp3dpapi_enabled())
+  {
+    showString(PSTR("Planner Init\r\n"));
+  }
   plan_init();  // Initialize planner;
 
-  showString(PSTR("Stepper Timer init\r\n"));
+  if(!dlp3dpapi_enabled())
+  {
+    showString(PSTR("Stepper Timer init\r\n"));
+  }
   st_init();    // Initialize stepper
 
   #ifdef USE_EEPROM_SETTINGS
@@ -954,14 +968,18 @@ ClearToSend();
   #endif
 
   //Free Ram
-  showString(PSTR("Free Ram: "));
-  Serial.println(FreeRam1());
+  if(!dlp3dpapi_enabled())
+  {
+    showString(PSTR("Free Ram: "));
+    Serial.println(FreeRam1());
+
+    //Planner Buffer Size
   
-  //Planner Buffer Size
-  showString(PSTR("Plan Buffer Size:"));
-  Serial.print((int)sizeof(block_t)*BLOCK_BUFFER_SIZE);
-  showString(PSTR(" / "));
-  Serial.println(BLOCK_BUFFER_SIZE);
+    showString(PSTR("Plan Buffer Size:"));
+    Serial.print((int)sizeof(block_t)*BLOCK_BUFFER_SIZE);
+    showString(PSTR(" / "));
+    Serial.println(BLOCK_BUFFER_SIZE);
+  }
   
   for(int8_t i=0; i < NUM_AXIS; i++)
   {
@@ -1000,10 +1018,24 @@ void loop()
     }
     else
     {
+      if( dlp3dpapi_enabled() )
+      {
+        process_dlp3dpapi_commands();
+      }
+      else
+      {
         process_commands();
+      }
     }
 #else
-    process_commands();
+    if( dlp3dpapi_enabled() )
+    {
+        process_dlp3dpapi_commands();
+    }
+    else
+    {
+        process_commands();
+    }
 #endif
 
     buflen = (buflen-1);
@@ -1932,9 +1964,9 @@ FORCE_INLINE void process_commands()
         }
       }
       break;
-
+      
 #if NUM_SERVOS > 0
-      case 280: // M280 - set servo position absolute. P: servo index, S: angle or microseconds, I: step interval angle, D: step interval delay
+      case 280: // M280 - set servo position absolute. P: servo index, S: angle or microseconds
       {
         int servo_index = -1;
         int servo_interval = 0;
@@ -2004,7 +2036,7 @@ FORCE_INLINE void process_commands()
         }
       }
       break;
-#endif // NUM_SERVOS > 0
+    #endif // NUM_SERVOS > 0
 
 #ifdef PIDTEMP
       case 301: // M301
@@ -2086,16 +2118,84 @@ FORCE_INLINE void process_commands()
             showString(PSTR("Free Ram: "));
             Serial.println(FreeRam1()); 
       break;
-      #ifdef PROJECTOR_CTRL
+      
+#ifdef PROJECTOR_CTRL
       case 605: // M605  Turn on the Projector
+      {
+        int proj_type = 0;
+        if (code_seen('P')) proj_type = code_value();
+        switch(proj_type)
+        {
+          case 0: // Acer H6510BD
             Serial.println("Projector On");
-            PJSerial.write(PJ_CMD_ON,sizeof(PJ_CMD_ON)); // projector serial send command
+            PJSerial.write(PJ_CMD_ON_ACER, sizeof(PJ_CMD_ON_ACER)); // projector serial send command
+            break;
+          case 1: // Viewsonic PJD7820HD 
+            Serial.println("Projector On");
+            PJSerial.write(PJ_CMD_ON_VIEWSONIC, sizeof(PJ_CMD_ON_VIEWSONIC)); // projector serial send command
+            break;
+          case 2: // Vivitek DH91x
+            Serial.println("Projector On");
+            PJSerial.write(PJ_CMD_ON_VIVITEK, sizeof(PJ_CMD_ON_VIVITEK)); // projector serial send command
+            break;
+          default:
+            showString(PSTR("Unknown Projector Type: "));
+            Serial.println(proj_type);
+        }
+      }       
       break;
+      
       case 606: // M606  Turn off the Projector
-            Serial.println("Projector OFF");
-            PJSerial.write(PJ_CMD_OFF,sizeof(PJ_CMD_OFF)); 
+      {
+        int proj_type = 0;
+        if (code_seen('P')) proj_type = code_value();
+        switch(proj_type)
+        {
+          case 0: // Acer H6510BD
+            Serial.println("Projector Off");
+            PJSerial.write(PJ_CMD_OFF_ACER, sizeof(PJ_CMD_OFF_ACER)); // projector serial send command
+            break;
+          case 1: // Viewsonic PJD7820HD
+            Serial.println("Projector Off");
+            PJSerial.write(PJ_CMD_OFF_VIEWSONIC, sizeof(PJ_CMD_OFF_VIEWSONIC)); // projector serial send command
+            break;
+          case 2: // Vivitek DH91x
+            Serial.println("Projector Off");
+            PJSerial.write(PJ_CMD_OFF_VIVITEK, sizeof(PJ_CMD_OFF_VIVITEK)); // projector serial send command
+            break;
+          default:
+            showString(PSTR("Unknown Projector Type: "));
+            Serial.println(proj_type);
+        }
+      }        
       break;
-      #endif
+      
+      case 607: // M607  Configure Projector
+      {
+        int proj_type = 0;
+        if( code_seen('P')) proj_type = code_value();
+        switch(proj_type)
+        {
+          case 0: // Acer H6510BD
+            Serial.println("Projector Serial Start");
+            PJSerial.begin(9600);
+            break;
+          case 1: // Viewsonic PJD7820HD
+            Serial.println("Projector Serial Start");
+            PJSerial.begin(115200);
+            break;
+          case 2: // Vivitek DH91x
+            Serial.println("Projector Serial Start");
+            PJSerial.begin(9600);
+            break;
+          default:
+            showString(PSTR("Unknown Projector Type: "));
+            Serial.println(proj_type);
+        }     
+      }
+      break;
+#endif
+
       default:
             #ifdef SEND_WRONG_CMD_INFO
               showString(PSTR("Unknown M-COM:"));
@@ -2114,7 +2214,6 @@ FORCE_INLINE void process_commands()
   ClearToSend();
       
 }
-
 
 
 void FlushSerialRequestResend()
