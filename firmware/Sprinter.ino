@@ -286,9 +286,10 @@ void __cxa_pure_virtual(){};
 
 // M605 - Turn On the Projector
 // M606 - Turn Off the Projector
+// M607 - Set Projector Serial Port
 
 
-#define _VERSION_TEXT "2.1 / 16.05.2016"
+#define _VERSION_TEXT "2.1a / 10.06.2016"
 
 //Stepper Movement Variables
 char axis_codes[NUM_AXIS] = {'X', 'Y', 'Z', 'E'};
@@ -2127,15 +2128,15 @@ FORCE_INLINE void process_commands()
         switch(proj_type)
         {
           case 0: // Acer H6510BD
-            Serial.println("Projector On");
+            Serial.println("Projector ACER On");
             PJSerial.write(PJ_CMD_ON_ACER, sizeof(PJ_CMD_ON_ACER)); // projector serial send command
             break;
           case 1: // Viewsonic PJD7820HD 
-            Serial.println("Projector On");
+            Serial.println("Projector VIEWSONIC On");
             PJSerial.write(PJ_CMD_ON_VIEWSONIC, sizeof(PJ_CMD_ON_VIEWSONIC)); // projector serial send command
             break;
           case 2: // Vivitek DH91x
-            Serial.println("Projector On");
+            Serial.println("Projector VIVITEK On");
             PJSerial.write(PJ_CMD_ON_VIVITEK, sizeof(PJ_CMD_ON_VIVITEK)); // projector serial send command
             break;
           default:
@@ -2152,15 +2153,15 @@ FORCE_INLINE void process_commands()
         switch(proj_type)
         {
           case 0: // Acer H6510BD
-            Serial.println("Projector Off");
+            Serial.println("Projector ACER Off");
             PJSerial.write(PJ_CMD_OFF_ACER, sizeof(PJ_CMD_OFF_ACER)); // projector serial send command
             break;
           case 1: // Viewsonic PJD7820HD
-            Serial.println("Projector Off");
+            Serial.println("Projector VIEWSONIC Off");
             PJSerial.write(PJ_CMD_OFF_VIEWSONIC, sizeof(PJ_CMD_OFF_VIEWSONIC)); // projector serial send command
             break;
           case 2: // Vivitek DH91x
-            Serial.println("Projector Off");
+            Serial.println("Projector VIVITEK Off");
             PJSerial.write(PJ_CMD_OFF_VIVITEK, sizeof(PJ_CMD_OFF_VIVITEK)); // projector serial send command
             break;
           default:
@@ -2177,15 +2178,15 @@ FORCE_INLINE void process_commands()
         switch(proj_type)
         {
           case 0: // Acer H6510BD
-            Serial.println("Projector Serial Start");
+            Serial.println("Projector ACER Serial Start");
             PJSerial.begin(9600);
             break;
           case 1: // Viewsonic PJD7820HD
-            Serial.println("Projector Serial Start");
+            Serial.println("Projector VIEWSONIC Serial Start");
             PJSerial.begin(115200);
             break;
           case 2: // Vivitek DH91x
-            Serial.println("Projector Serial Start");
+            Serial.println("Projector VIVITEK Serial Start");
             PJSerial.begin(9600);
             break;
           default:
