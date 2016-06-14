@@ -185,8 +185,6 @@
   #include "store_eeprom.h"
 #endif
 
-#include "dlp3dpapi.h"
-
 #ifndef CRITICAL_SECTION_START
 #ifdef ARDUINO_ARCH_STM32
   #define CRITICAL_SECTION_START  cli();
@@ -755,17 +753,10 @@ void setup()
 { 
   Serial.begin(BAUDRATE);
   
-  if( dlp3dpapi_enabled() )
-  {
-    dlp3dpapi_display_banner();
-  }
-  else
-  {
-    showString(PSTR("Sprinter\r\n"));
-    showString(PSTR(_VERSION_TEXT));
-    showString(PSTR("\r\n"));
-    showString(PSTR("start\r\n"));
-  }
+  showString(PSTR("Sprinter\r\n"));
+  showString(PSTR(_VERSION_TEXT));
+  showString(PSTR("\r\n"));
+  showString(PSTR("start\r\n"));
   
   servo_init();
 
@@ -946,16 +937,10 @@ void setup()
   init_Timer2_softpwm();
   #endif
   
-  if(!dlp3dpapi_enabled())
-  {
-    showString(PSTR("Planner Init\r\n"));
-  }
+  showString(PSTR("Planner Init\r\n"));
   plan_init();  // Initialize planner;
 
-  if(!dlp3dpapi_enabled())
-  {
-    showString(PSTR("Stepper Timer init\r\n"));
-  }
+  showString(PSTR("Stepper Timer init\r\n"));
   st_init();    // Initialize stepper
 
   #ifdef USE_EEPROM_SETTINGS
@@ -969,18 +954,14 @@ void setup()
   #endif
 
   //Free Ram
-  if(!dlp3dpapi_enabled())
-  {
-    showString(PSTR("Free Ram: "));
-    Serial.println(FreeRam1());
+  showString(PSTR("Free Ram: "));
+  Serial.println(FreeRam1());
 
-    //Planner Buffer Size
-  
-    showString(PSTR("Plan Buffer Size:"));
-    Serial.print((int)sizeof(block_t)*BLOCK_BUFFER_SIZE);
-    showString(PSTR(" / "));
-    Serial.println(BLOCK_BUFFER_SIZE);
-  }
+  //Planner Buffer Size
+  showString(PSTR("Plan Buffer Size:"));
+  Serial.print((int)sizeof(block_t)*BLOCK_BUFFER_SIZE);
+  showString(PSTR(" / "));
+  Serial.println(BLOCK_BUFFER_SIZE);
   
   for(int8_t i=0; i < NUM_AXIS; i++)
   {
@@ -1019,24 +1000,10 @@ void loop()
     }
     else
     {
-      if( dlp3dpapi_enabled() )
-      {
-        process_dlp3dpapi_commands();
-      }
-      else
-      {
         process_commands();
-      }
     }
 #else
-    if( dlp3dpapi_enabled() )
-    {
-        process_dlp3dpapi_commands();
-    }
-    else
-    {
-        process_commands();
-    }
+    process_commands();
 #endif
 
     buflen = (buflen-1);
